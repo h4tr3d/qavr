@@ -1,0 +1,16 @@
+build/
+win32-build/
+qtcreator-build/
+Makefile
+Makefile.Debug
+Makefile.Release
+object_script.*.Debug
+object_script.*.Release
+bin/
+*.pro.user
+*.pro.user.*
+.qdevelop
+src/gitinfo.*
+CMakeLists.txt.user*
+utils/xmlparts-build/
+utils/xmlparts/xmlparts.pro.user

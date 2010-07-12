@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/images">
+        <file alias="logo.svg">data/logo/logo.svg</file>
+        <file alias="icon32.png">data/logo/icon32.png</file>
+        <file alias="icon64.png">data/logo/icon64.png</file>
+        <file alias="icon128.png">data/logo/icon128.png</file>
+    </qresource>
+</RCC>
