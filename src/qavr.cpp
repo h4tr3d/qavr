@@ -205,7 +205,7 @@ void QAvr::on_hex_upload_clicked()
         return;
     }
 
-    args << "-e" << "-U" << "flash:w:" + hex_file->text();
+    args << "-e" << "-U" << "flash:w:" + hex_file->text() + ":a";
     startFlashProcess(args);
 }
 
@@ -242,7 +242,7 @@ void QAvr::on_verify_flash_clicked()
         return;
     }
 
-    args << "-U" << "flash:v:" + hex_file->text();
+    args << "-U" << "flash:v:" + hex_file->text() + ":a";
     startFlashProcess(args);
 }
 
