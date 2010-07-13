@@ -24,6 +24,7 @@
 #include <QBitArray>
 #include <QDesktopServices>
 #include <QCoreApplication>
+#include <QSplitter>
 
 #include <iostream>
 
@@ -32,7 +33,7 @@
 #include "bitscellwidget.h"
 #include "version.h"
 
-#undef DATA_PREFIX
+//#undef DATA_PREFIX
 #if !defined(DATA_PREFIX) || defined(WIN32)
 #undef  DATA_PREFIX
 #define DATA_PREFIX "."
@@ -350,6 +351,26 @@ void QAvr::loadSettings()
             additional_args = settings.value("additional_args").toString();
         settings.endGroup();
 
+        settings.beginGroup("Application");
+            bool is_maximized = settings.value("is_maximized").toBool();
+            if (is_maximized)
+            {
+                setWindowState(windowState() | Qt::WindowMaximized);
+            }
+            else
+            {
+                setGeometry(settings.value("geometry").toRect());
+            }
+        settings.endGroup();
+
+        settings.beginGroup("Programmer");
+            mcu->setEditText(settings.value("last_mcu").toString());
+            hex_file->setText(settings.value("flash_file").toString());
+
+            flash_output_splitter->restoreState(settings.value("output_size").toByteArray());
+            // TODO: flash format
+        settings.endGroup();
+
         settings.beginGroup("Fuses");
             fuse_names        = settings.value("names").toStringList();
             fuse_translations = settings.value("translations").toStringList();
@@ -381,6 +402,20 @@ void QAvr::saveSettings()
         settings.setValue("programmer_port",  programmer_port->text());
         settings.setValue("programmer_speed", programmer_speed->currentText());
         settings.setValue("additional_args",  avrdude_args->text());
+    settings.endGroup();
+
+    settings.beginGroup("Application");
+        settings.remove("");
+        settings.setValue("geometry",     geometry());
+        settings.setValue("is_maximized", isMaximized());
+    settings.endGroup();
+
+    settings.beginGroup("Programmer");
+        settings.remove("");
+        settings.setValue("last_mcu",    mcu->currentText());
+        settings.setValue("flash_file",  hex_file->text());
+        settings.setValue("output_size", flash_output_splitter->saveState());
+        // TODO: flash format
     settings.endGroup();
 
     settings.beginGroup("Fuses");
@@ -559,7 +594,7 @@ void QAvr::loadMCU()
 {
     QStringList filter;
     QFileInfoList mcu_list;
-    QDir mcu_dir(QString("%1/mcu").arg(DATA_PREFIX));
+    QDir mcu_dir(_data_dir_sys.filePath("mcu"));
 
     filter << "*.ini";
     mcu_dir.setNameFilters(filter);
@@ -731,4 +766,13 @@ void QAvr::loadAbout()
 void QAvr::on_fuse_default_clicked()
 {
     setFuseBitsToDefault(_unit);
+}
+
+// Close event processing
+void QAvr::closeEvent(QCloseEvent *ev)
+{
+    //ev->ignore(); // <--- application does not close
+    //ev->accept(); // <--- application will be closed
+    saveSettings();
+    ev->accept();
 }

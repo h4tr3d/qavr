@@ -23,6 +23,7 @@
 
 #include <QProcess>
 #include <QStringList>
+#include <QCloseEvent>
 
 #include "ui_qavr.h"
 #include "fuseprocess.h"
@@ -77,6 +78,9 @@ private:
     void        updateFuseTable(MCU unit);
 
     void        setFuseBitsToDefault(MCU unit);
+
+protected:
+    void        closeEvent(QCloseEvent *ev);
 
 private:
     QMap<QString, MCU>     _mcu_list;
