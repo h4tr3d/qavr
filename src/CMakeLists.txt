@@ -1,9 +1,11 @@
-# Use Svg
-set(QT_USE_QTSVG TRUE)
+if(WIN32)
+  set(additional_LINK_FLAGS -Wl,-subsystem,windows -Wl,-enable-auto-import -Wl,-enable-runtime-pseudo-reloc)
+endif(WIN32)
 
 add_definitions(-DDATA_PREFIX=\"${CMAKE_INSTALL_PREFIX}/share/${CMAKE_PROJECT_NAME}\")
 
 set(qavr_SRCS
+  util.cpp
   bitscellwidget.cpp
   fuseprocess.cpp
   main.cpp
@@ -12,6 +14,7 @@ set(qavr_SRCS
 
 set(qavr_HDRS
   bitscellwidget.h
+  version.h
   util.h
   fuseprocess.h
   qavr.h
@@ -65,6 +68,7 @@ add_executable(
 target_link_libraries(
     qavr
     ${QT_LIBRARIES}
+    ${additional_LINK_FLAGS}
 )
 
 ########### install files ###############

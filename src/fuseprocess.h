@@ -3,7 +3,7 @@
 **   hatred@inbox.ru
 **   http://hatred.homelinux.net
 **
-**   This file is a part of "%ProjectName%" application
+**   This file is a part of "QAvr" application
 **
 **   This program is free software; you can redistribute it and/or modify
 **   it under the terms of the version 2 of GNU General Public License as
@@ -11,10 +11,10 @@
 **
 **   For more information see LICENSE and LICENSE.ru files
 **
-**   @file   %FileName%
-**   @date   %DATE%
+**   @file   fuseprocess.h
+**   @date   2010-07-10
 **   @author hatred
-**   @brief
+**   @brief  class for reading and writing fuse bits
 **
 **************************************************************************/
 

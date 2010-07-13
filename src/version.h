@@ -18,30 +18,31 @@
 **
 **************************************************************************/
 
-#ifndef UTIL_H
-#define UTIL_H
+#ifndef VERSION_H
+#define VERSION_H
 
-//
-// Macroses
-//
+/*
+ * Consts:
+ *  APP_VERSION      - main application version, can be redefined from command line
+ *  APP_REVISION     - additional application version (like git build), can be redefined from command line
+ *  APP_VERSION_FULL - version and revision info
+ */
 
-// Set Bit in Byte
-#define SetBit(byte, bit) (byte |= (1 << bit))
+#ifndef  APP_VERSION
+#   define APP_VERSION "0.2"
+#endif
 
-// Get Bit from Byte
-#define GetBit(byte, bit) (byte & (1 << bit))
+#ifdef GIT
+#   include "gitinfo.h"
+#   ifndef APP_REVISION
+#       define APP_REVISION "git" GIT_REVISION
+#   endif
+#endif
 
-// Clear Bit in Byte
-#define ClearBit(byte, bit) (byte &= ~(1 << bit))
+#if defined(APP_REVISION)
+#   define APP_VERSION_FULL APP_VERSION "-" APP_REVISION
+#else
+#   define APP_VERSION_FULL APP_VERSION
+#endif
 
-//
-// Definitions and enums
-//
-
-
-//
-// Declarations
-//
-const char *getUserName();
-
-#endif // UTIL_H
+#endif // VERSION_H

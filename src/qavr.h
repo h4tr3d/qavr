@@ -87,7 +87,12 @@ private:
     FuseProcess        *_fuse_process;
     Fuses               _fuses;
     MCU                 _unit;
+
     QString             _xdg_config;
+    QDir                _config_dir;
+    QDir                _data_dir_sys;
+    QDir                _data_dir_user;
+    QDir                _tmp_dir;
 
 private slots:
     void on_fuse_default_clicked();

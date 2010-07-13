@@ -3,7 +3,10 @@
 source project.conf
 
 cd ..
-VERSION=`cat src/config.h | grep '^#define' | grep 'APP_VERSION' | awk '{print $3}' | sed 's/"//g'`
+VERSION=`cat src/version.h | grep '^#.*define' | grep 'APP_VERSION' | head -1 | awk '{print $4}' | sed 's/"//g'`
+
+#echo $VERSION
+#exit 0
 
 [ -z "$VERSION" ] && VERSION="$project_default_version"
 

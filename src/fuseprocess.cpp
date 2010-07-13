@@ -3,7 +3,7 @@
 **   hatred@inbox.ru
 **   http://hatred.homelinux.net
 **
-**   This file is a part of "%ProjectName%" application
+**   This file is a part of "QAvr" application
 **
 **   This program is free software; you can redistribute it and/or modify
 **   it under the terms of the version 2 of GNU General Public License as
@@ -11,18 +11,20 @@
 **
 **   For more information see LICENSE and LICENSE.ru files
 **
-**   @file   %FileName%
-**   @date   %DATE%
+**   @file   fuseprocess.cpp
+**   @date   2010-07-10
 **   @author hatred
-**   @brief
+**   @brief  class for reading and writing fuse bits
 **
 **************************************************************************/
 
 #include <QFile>
 #include <QDir>
 #include <QFileInfo>
+#include <QCoreApplication>
 
 #include "fuseprocess.h"
+#include "util.h"
 
 FuseProcess::FuseProcess(QObject *parent, QString command, QStringList std_args) :
     QProcess(parent)
@@ -37,7 +39,13 @@ FuseProcess::FuseProcess(QObject *parent, QString command, QStringList std_args)
 
     _current_state = NONE_STATE;
 
-    _tmp_dir.setPath("/tmp");
+    QString tmp = QString("%1/%2-%3")
+                    .arg(QDir::tempPath())
+                    .arg(qApp->applicationName())
+                    .arg(getUserName());
+    _tmp_dir.setPath(tmp);
+    if (!_tmp_dir.exists())
+        _tmp_dir.mkpath(tmp);
 }
 
 void FuseProcess::readFuses(QStringList read_fuses)

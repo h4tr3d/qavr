@@ -22,13 +22,17 @@
 #include <QFileDialog>
 #include <QSettings>
 #include <QBitArray>
+#include <QDesktopServices>
+#include <QCoreApplication>
+
 #include <iostream>
 
 #include "qavr.h"
 #include "util.h"
 #include "bitscellwidget.h"
+#include "version.h"
 
-//#undef DATA_PREFIX
+#undef DATA_PREFIX
 #if !defined(DATA_PREFIX) || defined(WIN32)
 #undef  DATA_PREFIX
 #define DATA_PREFIX "."
@@ -132,15 +136,31 @@ QAvr::QAvr(QWidget *parent) :
     }
 
     //
-    // Config
+    // Data and Settings
     //
-    _xdg_config = getenv("XDG_CONFIG_HOME");
-    if(_xdg_config.isEmpty())
+    qApp->setApplicationName("qavr");
+    qApp->setApplicationVersion(APP_VERSION_FULL);
+    std::cout << "Version: " << APP_VERSION_FULL << std::endl;
+
+    _data_dir_sys.setPath(DATA_PREFIX);
+    _data_dir_user.setPath(QDesktopServices::storageLocation(QDesktopServices::DataLocation));
+
+    QString tmp = QString("%1/%2-%3")
+                    .arg(QDir::tempPath())
+                    .arg(qApp->applicationName())
+                    .arg(getUserName());
+    _tmp_dir.setPath(tmp);
+    if (!_tmp_dir.exists())
+        _tmp_dir.mkpath(tmp);
+
+    QSettings cfg(QSettings::IniFormat, QSettings::UserScope, "qavr", "qavr");
+    QString   dir = QFileInfo(cfg.fileName()).absolutePath() + "/";
+    _config_dir.setPath(dir);
+    if (!_config_dir.exists())
     {
-        _xdg_config  = getenv("HOME");
-        _xdg_config += "/.config";
+        _config_dir.mkpath(_config_dir.path());
     }
-    _xdg_config += "/qavr.ini";
+    _xdg_config = _config_dir.filePath("qavr.ini");
 
     loadSettings();
 
@@ -702,7 +722,7 @@ void QAvr::loadAbout()
     about_data = about_file.readAll();
     about_file.close();
 
-    about_data.replace("{{version}}", "0.1") // TODO: fix package version
+    about_data.replace("{{version}}", APP_VERSION_FULL) // TODO: fix package version
               .replace("{{image}}", ":/images/icon128.png");
 
     about_view->setHtml(about_data);
