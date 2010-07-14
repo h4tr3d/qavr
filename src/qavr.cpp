@@ -33,7 +33,7 @@
 #include "bitscellwidget.h"
 #include "version.h"
 
-#undef DATA_PREFIX
+//#undef DATA_PREFIX
 #if !defined(DATA_PREFIX) || defined(WIN32)
 #undef  DATA_PREFIX
 #define DATA_PREFIX "."

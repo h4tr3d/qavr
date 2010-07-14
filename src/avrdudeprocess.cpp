@@ -411,7 +411,13 @@ void AvrdudeProcess::readCommon(QString memory, AvrdudeProcess::FlashFormat form
 void AvrdudeProcess::saveCommon(QString memory, QString file, AvrdudeProcess::FlashFormat format)
 {
     QStringList args = formCommonArgsList();
-    QString format_str = flashFormat(format);
+    QString format_str;
+
+    // Auto format for saving does not correct: use intel hex
+    if (format == FLASH_AUTO)
+        format = FLASH_INTEL_HEX;
+
+    format_str = flashFormat(format);
 
     args << "-U" << memory + ":r:" + file + ":" + format_str;
 
