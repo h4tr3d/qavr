@@ -203,7 +203,7 @@ int main(int argc, char *argv[])
             else if (reader.isCharacters() && !reader.isWhitespace())
             {
                 QString stack_str = stack.join("/");
-                std::cout << stack_str.toAscii().data() << std::endl;
+                //std::cout << stack_str.toAscii().data() << std::endl;
                 if (stack_str.contains("/admin/part_name", Qt::CaseInsensitive))
                 {
                     mcu.name = reader.text().toString();
