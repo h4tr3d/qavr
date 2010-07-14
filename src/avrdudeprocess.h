@@ -32,9 +32,33 @@ class AvrdudeProcess : public QProcess
 {
     Q_OBJECT
 public:
-    explicit AvrdudeProcess(QObject *parent = 0,
-                            QString command = QString("avrdude"),
-                            QStringList std_args = QStringList());
+    enum FlashFormat {
+        FLASH_AUTO,
+        FLASH_INTEL_HEX,
+        FLASH_MOTOROLA,
+        FLASH_BINARY
+    };
+
+public:
+    explicit AvrdudeProcess(QObject *parent = 0);
+
+    // Common
+    void    setCommand(QString command);
+    QString getCommand();
+    void    setConfigFile(QString config_file);
+    QString getConfigFile();
+    void    setProgrammerType(QString programmer_type);
+    QString getProgrammerType();
+    void    setProgrammerSpeed(QString programmer_speed);
+    QString getProgrammerSpeed();
+    void    setProgrammerPort(QString programmer_port);
+    QString getProgrammerPort();
+    void    setMcuName(QString mcu_name);
+    QString getMcuName();
+    void        setAdditionalArgs(QStringList additional_args);
+    QStringList getAdditionalArgs();
+
+    QStringList formCommonArgsList();
 
     // Fuses
     void readFuses(QStringList read_fuses);
@@ -44,28 +68,68 @@ public:
     void setFuseTrans(QMap<QString, QString> trans);
 
     // Flash
+    void uploadFlash(QString file, AvrdudeProcess::FlashFormat format = FLASH_AUTO);
+    void readFlash(AvrdudeProcess::FlashFormat format = FLASH_INTEL_HEX);
+    void saveFlash(QString file, AvrdudeProcess::FlashFormat format = FLASH_INTEL_HEX);
+    void verifyFlash(QString file, AvrdudeProcess::FlashFormat format = FLASH_INTEL_HEX);
+
+    // EEPROM
+    void uploadEEPROM(QString file, AvrdudeProcess::FlashFormat format = FLASH_AUTO);
+    void readEEPROM(AvrdudeProcess::FlashFormat format = FLASH_INTEL_HEX);
+    void saveEEPROM(QString file, AvrdudeProcess::FlashFormat format = FLASH_INTEL_HEX);
+    void verifyEEPROM(QString file, AvrdudeProcess::FlashFormat format = FLASH_INTEL_HEX);
 
 private:
+    // Common types
     enum States {
         NONE_STATE,
+
+        // Fuse states
         WRITE_FUSE_STATE,
         READ_FUSE_STATE,
-        DECODE_FUSE_STATE
+        DECODE_FUSE_STATE,
+
+        // Flash states
+        UPLOAD_FLASH_STATE,
+        READ_FLASH_STATE,
+        SAVE_FLASH_STATE,
+        VERIFY_FLASH_STATE,
+
+        // EEPROM states
+        UPLOAD_EEPROM_STATE,
+        READ_EEPROM_STATE,
+        SAVE_EEPROM_STATE,
+        VERIFY_EEPROM_STATE
     };
 
+    // Common functions
+    void   setState(States state);
+    States getState();
+
+    // Fuse functions
     unsigned char readFromFile(QString file);
     QString       fuseName(QString name);
 
-    QString     _command;
-    QStringList _std_args;
+    // Flash/EEPROM common
+    void uploadCommon(QString memory, QString file, AvrdudeProcess::FlashFormat format);
+    void readCommon(QString memory, AvrdudeProcess::FlashFormat format);
+    void saveCommon(QString memory, QString file, AvrdudeProcess::FlashFormat format);
+    void verifyCommon(QString memory, QString file, AvrdudeProcess::FlashFormat format);
+
+    // Flash functions
+    QString       flashFormat(FlashFormat format);
+
+    // Common vars
     QDir        _tmp_dir;
     States      _current_state;
 
+    QString     _command;
     QString     _config_file;
     QString     _programmer_type;
     QString     _programmer_speed;
     QString     _programmer_port;
     QString     _mcu_name;
+    QStringList _additional_args;
 
     // Fuses vars
     QStringList            _fuses;
@@ -73,6 +137,8 @@ private:
     QMap<QString, QString> _fuse_trans;
     bool                   _is_fuses_avail;
 
+    // Flash vars
+    QMap<FlashFormat, QString> _flash_format;
 
 signals:
     void fusesAvail(QStringList fuses);

@@ -45,9 +45,18 @@ QAvr::QAvr(QWidget *parent) :
     setupUi(this);
 
     setWindowIcon(QIcon(":/images/icon64.png"));
+    qApp->setApplicationName("qavr");
+    qApp->setApplicationVersion(APP_VERSION_FULL);
+    std::cout << "Version: " << APP_VERSION_FULL << std::endl;
 
-    _flash_process   = NULL;
-    _avrdude_process = NULL;
+    _avrdude_process = new AvrdudeProcess(this);
+    _avrdude_process->setProcessChannelMode(QProcess::MergedChannels);
+    connect(_avrdude_process, SIGNAL(finished(int, QProcess::ExitStatus)),
+            this,             SLOT(avrdudeProcessFinished(int, QProcess::ExitStatus)));
+    connect(_avrdude_process, SIGNAL(readyRead()),
+            this,             SLOT(readyForReadAvrdude()));
+    connect(_avrdude_process, SIGNAL(fusesAvail(QStringList)),
+            this,             SLOT(fusesAvail(QStringList)));
 
     // TODO: load from config? or generate?
     _programmer_types
@@ -128,10 +137,6 @@ QAvr::QAvr(QWidget *parent) :
     //
     // Data and Settings
     //
-    qApp->setApplicationName("qavr");
-    qApp->setApplicationVersion(APP_VERSION_FULL);
-    std::cout << "Version: " << APP_VERSION_FULL << std::endl;
-
     _data_dir_sys.setPath(DATA_PREFIX);
     _data_dir_user.setPath(QDesktopServices::storageLocation(QDesktopServices::DataLocation));
     if (!_data_dir_user.exists())
@@ -204,28 +209,23 @@ void QAvr::on_select_hex_file_clicked()
 
 void QAvr::on_hex_upload_clicked()
 {
-    QStringList args;
-
     if (hex_file->text().isEmpty())
     {
         return;
     }
 
-    args << "-e" << "-U" << "flash:w:" + hex_file->text() + ":a";
-    startFlashProcess(args);
+    prepareAvrdudeProcess();
+    _avrdude_process->uploadFlash(hex_file->text());
 }
 
 void QAvr::on_load_flash_clicked()
 {
-    QStringList args;
-
-    args << "-U" << "flash:r:-:i";
-    startFlashProcess(args);
+    prepareAvrdudeProcess();
+    _avrdude_process->readFlash();
 }
 
 void QAvr::on_save_flash_clicked()
 {
-    QStringList args;
     QString save_file;
 
     save_file = QFileDialog::getSaveFileName(this, tr("Save HEX file"), "", "*.hex;;All files (*)");
@@ -235,99 +235,53 @@ void QAvr::on_save_flash_clicked()
         return;
     }
 
-    args << "-U" << "flash:r:" + save_file + ":i";
-    startFlashProcess(args);
+    prepareAvrdudeProcess();
+    _avrdude_process->saveFlash(save_file);
 }
 
 void QAvr::on_verify_flash_clicked()
 {
-    QStringList args;
-
     if (hex_file->text().isEmpty())
     {
         return;
     }
 
-    args << "-U" << "flash:v:" + hex_file->text() + ":a";
-    startFlashProcess(args);
-}
-
-// Form command line for run
-QStringList QAvr::formCmdStdArgs()
-{
-    QStringList ret;
-    QString mcu_name;
-    QString tmp_str;
-
-    ret << "-c" << programmer_type->currentText()
-        << "-B" << programmer_speed->currentText();
-
-    tmp_str = programmer_port->text();
-    if (!tmp_str.isEmpty())
-        ret << "-P" << tmp_str;
-
-    mcu_name = mcu->currentText();
-    if (!_mcu_list[mcu_name].prog_name.isEmpty())
-    {
-        mcu_name = _mcu_list[mcu_name].prog_name;
-    }
-
-    ret << "-p" << mcu_name;
-
-    return ret;
-}
-
-void QAvr::startFlashProcess(QStringList additional_args)
-{
-    if (_flash_process != NULL)
-    {
-        stopFlashProcess();
-    }
-
-    _flash_process = new QProcess(this);
-    if (_flash_process == NULL)
-    {
-        return;
-    }
-
-    _flash_process->setProcessChannelMode(QProcess::MergedChannels);
-
-    connect(_flash_process, SIGNAL(finished(int,QProcess::ExitStatus)),
-            this,           SLOT(flashProcessFinished(int,QProcess::ExitStatus)));
-    connect(_flash_process, SIGNAL(readyRead()),
-            this,           SLOT(readyForRead()));
-
-    flash_output->clear();
-
-    QStringList args = formCmdStdArgs();
-    args << additional_args;
-    QString command = avrdude_command->text();
-
-    _flash_process->start(command, args);
-}
-
-void QAvr::stopFlashProcess()
-{
-    if (_flash_process != NULL)
-        delete _flash_process;
-}
-
-void QAvr::readyForRead()
-{
-    while(_flash_process->bytesAvailable() > 0)
-    {
-        QString data = flash_output->toPlainText();
-        data += _flash_process->readLine();
-        flash_output->setPlainText(data);
-    }
+    prepareAvrdudeProcess();
+    _avrdude_process->verifyFlash(hex_file->text());
 }
 
 
-void QAvr::flashProcessFinished(int, QProcess::ExitStatus)
+void QAvr::avrdudeProcessFinished(int, QProcess::ExitStatus)
 {
     // TODO
     std::cout << "Finished\n";
 }
+
+// Read data from avrdude
+void QAvr::readyForReadAvrdude()
+{
+    while(_avrdude_process->bytesAvailable() > 0)
+    {
+        QString data = flash_output->toPlainText();
+        data += _avrdude_process->readLine();
+        flash_output->setPlainText(data);
+    }
+}
+
+void QAvr::fusesAvail(QStringList fuses)
+{
+    _fuses = _avrdude_process->getFuses();
+    updateGuiFromData();
+
+    Fuses f = _avrdude_process->getFuses();
+    QString str;
+    for (int i = 0; i < fuses.count(); i++)
+    {
+        str += QString("%1 = 0x%2, ").arg(fuses.at(i)).arg(f[fuses.at(i)], 0, 16);
+    }
+    std::cout << "Fuses avail: " << str.toAscii().data() << "\n";
+}
+
 
 // Load settings
 void QAvr::loadSettings()
@@ -336,6 +290,7 @@ void QAvr::loadSettings()
     QSettings settings(_xdg_config, QSettings::IniFormat);
 
     QString command = "avrdude";
+    QString config  = "";
     QString type = "duemilanove";
     QString port = "002/002";
     QString speed = "19200";
@@ -351,6 +306,7 @@ void QAvr::loadSettings()
     {
         settings.beginGroup("Settings");
             command         = settings.value("avrdude_command").toString();
+            config          = settings.value("avrdude_config").toString();
             type            = settings.value("programmer_type").toString();
             port            = settings.value("programmer_port").toString();
             speed           = settings.value("programmer_speed").toString();
@@ -384,6 +340,7 @@ void QAvr::loadSettings()
     }
 
     avrdude_command->setText(command);
+    config_file->setText(config);
     programmer_type->setEditText(type);
     programmer_port->setText(port);
     programmer_speed->setEditText(speed);
@@ -404,6 +361,7 @@ void QAvr::saveSettings()
         settings.remove("");
 
         settings.setValue("avrdude_command",  avrdude_command->text());
+        settings.setValue("avrdude_config",   config_file->text());
         settings.setValue("programmer_type",  programmer_type->currentText());
         settings.setValue("programmer_port",  programmer_port->text());
         settings.setValue("programmer_speed", programmer_speed->currentText());
@@ -448,86 +406,45 @@ void QAvr::on_save_settings_clicked()
     saveSettings();
 }
 
-void QAvr::readyForReadFuses()
-{
-    while(_avrdude_process->bytesAvailable() > 0)
-    {
-        QString data = flash_output->toPlainText();
-        data += _avrdude_process->readLine();
-        flash_output->setPlainText(data);
-    }
-}
-
 void QAvr::readFuses()
 {
-    stopFuseProcess();
-
-    _avrdude_process = new AvrdudeProcess(this, avrdude_command->text(), formCmdStdArgs());
-    if (_avrdude_process == NULL)
-    {
-        return;
-    }
-
-    _avrdude_process->setProcessChannelMode(QProcess::MergedChannels);
-    _avrdude_process->setFuseTrans(_fuse_trans);
-
-    connect(_avrdude_process, SIGNAL(finished(int,QProcess::ExitStatus)),
-            this,           SLOT(flashProcessFinished(int,QProcess::ExitStatus)));
-    connect(_avrdude_process, SIGNAL(readyRead()),
-            this,           SLOT(readyForReadFuses()));
-    connect(_avrdude_process, SIGNAL(fusesAvail(QStringList)),
-            this,          SLOT(fusesAvail(QStringList)));
-
-    flash_output->clear();
-
+    prepareAvrdudeProcess();
     _avrdude_process->readFuses(_unit.fuses);
 }
 
 void QAvr::writeFuses()
 {
-    stopFuseProcess();
-
-    _avrdude_process = new AvrdudeProcess(this, avrdude_command->text(), formCmdStdArgs());
-    if (_avrdude_process == NULL)
-    {
-        return;
-    }
-
-    _avrdude_process->setProcessChannelMode(QProcess::MergedChannels);
-    _avrdude_process->setFuseTrans(_fuse_trans);
-
-    connect(_avrdude_process, SIGNAL(finished(int,QProcess::ExitStatus)),
-            this,           SLOT(flashProcessFinished(int,QProcess::ExitStatus)));
-    connect(_avrdude_process, SIGNAL(readyRead()),
-            this,           SLOT(readyForReadFuses()));
-
-    flash_output->clear();
-
+    prepareAvrdudeProcess();
     _avrdude_process->writeFuses(_unit.fuses, _fuses);
 }
 
-void QAvr::stopFuseProcess()
+void QAvr::prepareAvrdudeProcess()
 {
-    if (_avrdude_process)
+    QString mcu_name;
+
+    stopAvrdudeProcess();
+    flash_output->clear();
+
+    _avrdude_process->setCommand(avrdude_command->text());
+    _avrdude_process->setConfigFile(config_file->text());
+    _avrdude_process->setProgrammerType(programmer_type->currentText());
+    _avrdude_process->setProgrammerPort(programmer_port->text());
+    _avrdude_process->setProgrammerSpeed(programmer_speed->currentText());
+    _avrdude_process->setFuseTrans(_fuse_trans);
+
+    mcu_name = mcu->currentText();
+    if (!_mcu_list[mcu_name].prog_name.isEmpty())
     {
-        delete _avrdude_process;
-        _avrdude_process = NULL;
+        mcu_name = _mcu_list[mcu_name].prog_name;
     }
+    _avrdude_process->setMcuName(mcu_name);
 }
 
-void QAvr::fusesAvail(QStringList fuses)
+void QAvr::stopAvrdudeProcess()
 {
-    _fuses = _avrdude_process->getFuses();
-    updateGuiFromData();
-
-    Fuses f = _avrdude_process->getFuses();
-    QString str;
-    for (int i = 0; i < fuses.count(); i++)
-    {
-        str += QString("%1 = 0x%2, ").arg(fuses.at(i)).arg(f[fuses.at(i)], 0, 16);
-    }
-    std::cout << "Fuses avail: " << str.toAscii().data() << "\n";
+    _avrdude_process->kill();
 }
+
 
 void QAvr::on_fuse_read_clicked()
 {
@@ -781,4 +698,67 @@ void QAvr::closeEvent(QCloseEvent *e)
     //ev->accept(); // <--- application will be closed
     saveSettings();
     e->accept();
+}
+
+
+//
+// EEPROM work
+//
+
+void QAvr::on_select_eeprom_clicked()
+{
+    QString file;
+
+    file = QFileDialog::getOpenFileName(this, tr("Open EEPROM HEX file"),
+                                        "", "*.ee.hex;;All files (*)");
+
+    if (!file.isEmpty())
+    {
+        eeprom_file->setText(file);
+    }
+
+}
+
+void QAvr::on_upload_eeprom_clicked()
+{
+    if (eeprom_file->text().isEmpty())
+    {
+        return;
+    }
+
+    prepareAvrdudeProcess();
+    _avrdude_process->uploadEEPROM(eeprom_file->text());
+}
+
+void QAvr::on_read_eeprom_clicked()
+{
+    prepareAvrdudeProcess();
+    _avrdude_process->readEEPROM();
+}
+
+void QAvr::on_save_eeprom_clicked()
+{
+    QString save_file;
+
+    save_file = QFileDialog::getSaveFileName(this, tr("Save EEPROM HEX file"),
+                                             "", "*.ee.hex;;All files (*)");
+
+    if (save_file.isEmpty())
+    {
+        return;
+    }
+
+    prepareAvrdudeProcess();
+    _avrdude_process->saveEEPROM(save_file);
+}
+
+void QAvr::on_verify_eeprom_clicked()
+{
+    if (eeprom_file->text().isEmpty())
+    {
+        return;
+    }
+
+    prepareAvrdudeProcess();
+    _avrdude_process->verifyEEPROM(eeprom_file->text());
 }

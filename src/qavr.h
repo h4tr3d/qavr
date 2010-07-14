@@ -59,11 +59,6 @@ protected:
     void        closeEvent(QCloseEvent *e);
 
 private:
-    QStringList formCmdStdArgs();
-
-    void        startFlashProcess(QStringList additional_args);
-    void        stopFlashProcess();
-
     void        loadSettings();
     void        saveSettings();
     void        loadMCU(QDir data_dir);
@@ -71,7 +66,9 @@ private:
 
     void        readFuses();
     void        writeFuses();
-    void        stopFuseProcess();
+
+    void        prepareAvrdudeProcess();
+    void        stopAvrdudeProcess();
 
     void        updateGuiFromData();
     void        updateDataFromGui();
@@ -85,7 +82,6 @@ private:
     QMap<QString, QString> _fuse_trans;
     QStringList            _programmer_types;
 
-    QProcess           *_flash_process;
     AvrdudeProcess     *_avrdude_process;
     Fuses               _fuses;
     MCU                 _unit;
@@ -97,6 +93,11 @@ private:
     QDir                _tmp_dir;
 
 private slots:
+    void on_verify_eeprom_clicked();
+    void on_save_eeprom_clicked();
+    void on_read_eeprom_clicked();
+    void on_upload_eeprom_clicked();
+    void on_select_eeprom_clicked();
     void on_fuse_default_clicked();
     void on_mcu_currentIndexChanged(QString );
     void on_mcu_editTextChanged(QString );
@@ -110,10 +111,8 @@ private slots:
     void on_select_hex_file_clicked();
 
 private slots:
-    void readyForRead();
-    void flashProcessFinished(int, QProcess::ExitStatus);
-
-    void readyForReadFuses();
+    void avrdudeProcessFinished(int, QProcess::ExitStatus);
+    void readyForReadAvrdude();
     void fusesAvail(QStringList fuses);
 
     void fuseBitsToggled(bool val);
