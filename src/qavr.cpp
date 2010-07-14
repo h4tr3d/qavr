@@ -33,7 +33,7 @@
 #include "bitscellwidget.h"
 #include "version.h"
 
-//#undef DATA_PREFIX
+#undef DATA_PREFIX
 #if !defined(DATA_PREFIX) || defined(WIN32)
 #undef  DATA_PREFIX
 #define DATA_PREFIX "."
@@ -46,8 +46,8 @@ QAvr::QAvr(QWidget *parent) :
 
     setWindowIcon(QIcon(":/images/icon64.png"));
 
-    _flash_process = NULL;
-    _fuse_process  = NULL;
+    _flash_process   = NULL;
+    _avrdude_process = NULL;
 
     // TODO: load from config? or generate?
     _programmer_types
@@ -126,17 +126,6 @@ QAvr::QAvr(QWidget *parent) :
     fuse_table->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
 
     //
-    // MCUs
-    //
-    loadMCU();
-
-    QMap<QString, MCU>::iterator it;
-    for (it = _mcu_list.begin(); it != _mcu_list.end(); it++)
-    {
-        mcu->addItem(it.key());
-    }
-
-    //
     // Data and Settings
     //
     qApp->setApplicationName("qavr");
@@ -145,6 +134,8 @@ QAvr::QAvr(QWidget *parent) :
 
     _data_dir_sys.setPath(DATA_PREFIX);
     _data_dir_user.setPath(QDesktopServices::storageLocation(QDesktopServices::DataLocation));
+    if (!_data_dir_user.exists())
+        _data_dir_user.mkpath(_data_dir_user.path());
 
     QString tmp = QString("%1/%2-%3")
                     .arg(QDir::tempPath())
@@ -163,6 +154,21 @@ QAvr::QAvr(QWidget *parent) :
     }
     _xdg_config = _config_dir.filePath("qavr.ini");
 
+    //
+    // Load MCUs
+    //
+    loadMCU(_data_dir_sys);
+    loadMCU(_data_dir_user);
+
+    QMap<QString, MCU>::iterator it;
+    for (it = _mcu_list.begin(); it != _mcu_list.end(); it++)
+    {
+        mcu->addItem(it.key());
+    }
+
+    //
+    // Load settings
+    //
     loadSettings();
 
     //
@@ -444,10 +450,10 @@ void QAvr::on_save_settings_clicked()
 
 void QAvr::readyForReadFuses()
 {
-    while(_fuse_process->bytesAvailable() > 0)
+    while(_avrdude_process->bytesAvailable() > 0)
     {
         QString data = flash_output->toPlainText();
-        data += _fuse_process->readLine();
+        data += _avrdude_process->readLine();
         flash_output->setPlainText(data);
     }
 }
@@ -456,65 +462,65 @@ void QAvr::readFuses()
 {
     stopFuseProcess();
 
-    _fuse_process = new FuseProcess(this, avrdude_command->text(), formCmdStdArgs());
-    if (_fuse_process == NULL)
+    _avrdude_process = new AvrdudeProcess(this, avrdude_command->text(), formCmdStdArgs());
+    if (_avrdude_process == NULL)
     {
         return;
     }
 
-    _fuse_process->setProcessChannelMode(QProcess::MergedChannels);
-    _fuse_process->setFuseTrans(_fuse_trans);
+    _avrdude_process->setProcessChannelMode(QProcess::MergedChannels);
+    _avrdude_process->setFuseTrans(_fuse_trans);
 
-    connect(_fuse_process, SIGNAL(finished(int,QProcess::ExitStatus)),
+    connect(_avrdude_process, SIGNAL(finished(int,QProcess::ExitStatus)),
             this,           SLOT(flashProcessFinished(int,QProcess::ExitStatus)));
-    connect(_fuse_process, SIGNAL(readyRead()),
+    connect(_avrdude_process, SIGNAL(readyRead()),
             this,           SLOT(readyForReadFuses()));
-    connect(_fuse_process, SIGNAL(fusesAvail(QStringList)),
+    connect(_avrdude_process, SIGNAL(fusesAvail(QStringList)),
             this,          SLOT(fusesAvail(QStringList)));
 
     flash_output->clear();
 
-    _fuse_process->readFuses(_unit.fuses);
+    _avrdude_process->readFuses(_unit.fuses);
 }
 
 void QAvr::writeFuses()
 {
     stopFuseProcess();
 
-    _fuse_process = new FuseProcess(this, avrdude_command->text(), formCmdStdArgs());
-    if (_fuse_process == NULL)
+    _avrdude_process = new AvrdudeProcess(this, avrdude_command->text(), formCmdStdArgs());
+    if (_avrdude_process == NULL)
     {
         return;
     }
 
-    _fuse_process->setProcessChannelMode(QProcess::MergedChannels);
-    _fuse_process->setFuseTrans(_fuse_trans);
+    _avrdude_process->setProcessChannelMode(QProcess::MergedChannels);
+    _avrdude_process->setFuseTrans(_fuse_trans);
 
-    connect(_fuse_process, SIGNAL(finished(int,QProcess::ExitStatus)),
+    connect(_avrdude_process, SIGNAL(finished(int,QProcess::ExitStatus)),
             this,           SLOT(flashProcessFinished(int,QProcess::ExitStatus)));
-    connect(_fuse_process, SIGNAL(readyRead()),
+    connect(_avrdude_process, SIGNAL(readyRead()),
             this,           SLOT(readyForReadFuses()));
 
     flash_output->clear();
 
-    _fuse_process->writeFuses(_unit.fuses, _fuses);
+    _avrdude_process->writeFuses(_unit.fuses, _fuses);
 }
 
 void QAvr::stopFuseProcess()
 {
-    if (_fuse_process)
+    if (_avrdude_process)
     {
-        delete _fuse_process;
-        _fuse_process = NULL;
+        delete _avrdude_process;
+        _avrdude_process = NULL;
     }
 }
 
 void QAvr::fusesAvail(QStringList fuses)
 {
-    _fuses = _fuse_process->getFuses();
+    _fuses = _avrdude_process->getFuses();
     updateGuiFromData();
 
-    Fuses f = _fuse_process->getFuses();
+    Fuses f = _avrdude_process->getFuses();
     QString str;
     for (int i = 0; i < fuses.count(); i++)
     {
@@ -590,11 +596,11 @@ void QAvr::fuseBitsToggled(bool /*val*/)
 }
 
 // Load MCU list
-void QAvr::loadMCU()
+void QAvr::loadMCU(QDir data_dir)
 {
     QStringList filter;
     QFileInfoList mcu_list;
-    QDir mcu_dir(_data_dir_sys.filePath("mcu"));
+    QDir mcu_dir(data_dir.filePath("mcu"));
 
     filter << "*.ini";
     mcu_dir.setNameFilters(filter);
@@ -769,10 +775,10 @@ void QAvr::on_fuse_default_clicked()
 }
 
 // Close event processing
-void QAvr::closeEvent(QCloseEvent *ev)
+void QAvr::closeEvent(QCloseEvent *e)
 {
     //ev->ignore(); // <--- application does not close
     //ev->accept(); // <--- application will be closed
     saveSettings();
-    ev->accept();
+    e->accept();
 }

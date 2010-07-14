@@ -26,7 +26,7 @@
 #include <QCloseEvent>
 
 #include "ui_qavr.h"
-#include "fuseprocess.h"
+#include "avrdudeprocess.h"
 
 typedef struct MCU {
 
@@ -55,7 +55,8 @@ public:
     explicit QAvr(QWidget *parent = 0);
 
 protected:
-    void changeEvent(QEvent *e);
+    void        changeEvent(QEvent     *e);
+    void        closeEvent(QCloseEvent *e);
 
 private:
     QStringList formCmdStdArgs();
@@ -65,7 +66,7 @@ private:
 
     void        loadSettings();
     void        saveSettings();
-    void        loadMCU();
+    void        loadMCU(QDir data_dir);
     void        loadAbout();
 
     void        readFuses();
@@ -79,16 +80,13 @@ private:
 
     void        setFuseBitsToDefault(MCU unit);
 
-protected:
-    void        closeEvent(QCloseEvent *ev);
-
 private:
     QMap<QString, MCU>     _mcu_list;
     QMap<QString, QString> _fuse_trans;
     QStringList            _programmer_types;
 
     QProcess           *_flash_process;
-    FuseProcess        *_fuse_process;
+    AvrdudeProcess     *_avrdude_process;
     Fuses               _fuses;
     MCU                 _unit;
 

@@ -7,7 +7,7 @@ add_definitions(-DDATA_PREFIX=\"${CMAKE_INSTALL_PREFIX}/share/${CMAKE_PROJECT_NA
 set(qavr_SRCS
   util.cpp
   bitscellwidget.cpp
-  fuseprocess.cpp
+  avrdudeprocess.cpp
   main.cpp
   qavr.cpp
 )
@@ -16,7 +16,7 @@ set(qavr_HDRS
   bitscellwidget.h
   version.h
   util.h
-  fuseprocess.h
+  avrdudeprocess.h
   qavr.h
 )
 

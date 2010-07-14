@@ -11,7 +11,7 @@
 **
 **   For more information see LICENSE and LICENSE.ru files
 **
-**   @file   fuseprocess.cpp
+**   @file   avrdudeprocess.cpp
 **   @date   2010-07-10
 **   @author hatred
 **   @brief  class for reading and writing fuse bits
@@ -23,10 +23,10 @@
 #include <QFileInfo>
 #include <QCoreApplication>
 
-#include "fuseprocess.h"
+#include "avrdudeprocess.h"
 #include "util.h"
 
-FuseProcess::FuseProcess(QObject *parent, QString command, QStringList std_args) :
+AvrdudeProcess::AvrdudeProcess(QObject *parent, QString command, QStringList std_args) :
     QProcess(parent)
 {
     _command  = command;
@@ -48,10 +48,10 @@ FuseProcess::FuseProcess(QObject *parent, QString command, QStringList std_args)
         _tmp_dir.mkpath(tmp);
 }
 
-void FuseProcess::readFuses(QStringList read_fuses)
+void AvrdudeProcess::readFuses(QStringList read_fuses)
 {
     QStringList args = _std_args;
-    _current_state = READ_STATE;
+    _current_state = READ_FUSE_STATE;
     _is_fuses_avail = false;
 
     // read fuses args
@@ -74,10 +74,10 @@ void FuseProcess::readFuses(QStringList read_fuses)
     start(_command, args);
 }
 
-void FuseProcess::writeFuses(QStringList write_fuses, Fuses fuses)
+void AvrdudeProcess::writeFuses(QStringList write_fuses, Fuses fuses)
 {
     QStringList args = _std_args;
-    _current_state = WRITE_STATE;
+    _current_state = WRITE_FUSE_STATE;
 
     // read fuses args
     for (int i = 0; i < write_fuses.count(); i++)
@@ -90,21 +90,28 @@ void FuseProcess::writeFuses(QStringList write_fuses, Fuses fuses)
     start(_command, args);
 }
 
-bool FuseProcess::isFusesAvail()
+bool AvrdudeProcess::isFusesAvail()
 {
     return _is_fuses_avail;
 }
 
-Fuses FuseProcess::getFuses()
+Fuses AvrdudeProcess::getFuses()
 {
     return _values;
 }
 
-void FuseProcess::processFinished(int /*exit_code*/)
+void AvrdudeProcess::processFinished(int exit_code)
 {
-    if (_current_state == READ_STATE)
+    if (exit_code != 0)
     {
-        _current_state = DECODE_STATE;
+        emit avrdudeFail();
+        _current_state = NONE_STATE;
+        return;
+    }
+
+    if (_current_state == READ_FUSE_STATE)
+    {
+        _current_state = DECODE_FUSE_STATE;
         unsigned char ch;
 
         for (int i = 0; i < _fuses.count(); i++)
@@ -122,7 +129,7 @@ void FuseProcess::processFinished(int /*exit_code*/)
 }
 
 // Read fuse from file
-unsigned char FuseProcess::readFromFile(QString file_name)
+unsigned char AvrdudeProcess::readFromFile(QString file_name)
 {
     QFile     file(file_name);
     QFileInfo finfo( file );
@@ -146,13 +153,13 @@ unsigned char FuseProcess::readFromFile(QString file_name)
     return fuse_byte;
 }
 
-void FuseProcess::setFuseTrans(QMap<QString, QString> trans)
+void AvrdudeProcess::setFuseTrans(QMap<QString, QString> trans)
 {
     _fuse_trans = trans;
 }
 
 // Do fuse name translation into avrdude syntax
-QString FuseProcess::fuseName(QString name)
+QString AvrdudeProcess::fuseName(QString name)
 {
     QString new_name = _fuse_trans[name];
     if (new_name.isEmpty())
