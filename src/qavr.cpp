@@ -33,7 +33,7 @@
 #include "bitscellwidget.h"
 #include "version.h"
 
-//#undef DATA_PREFIX
+#undef DATA_PREFIX
 #if !defined(DATA_PREFIX) || defined(WIN32)
 #undef  DATA_PREFIX
 #define DATA_PREFIX "."
@@ -811,7 +811,12 @@ void QAvr::updateLockTable(MCU unit)
     int bit;
     int column = 0;
 
-    //_table->setColumnCount(fuses.count());
+    if (unit.lock_names.count() < 8)
+    {
+        lock_table->setColumnCount(0);
+        return;
+    }
+    lock_table->setColumnCount(1);
 
     for (int row = 0; row < lock_table->rowCount() - 1; row++)
     {
@@ -908,6 +913,10 @@ void QAvr::setLockBitsToDefault(MCU unit)
 {
     int bit;
     int column = 0;
+
+    if (_unit.lock_names.count() < 8)
+        return;
+
     for (int row = 0; row < lock_table->rowCount() - 1; row++)
     {
         bit = 7 - row;
@@ -956,8 +965,8 @@ void QAvr::loadFormats()
                  << tr("Motorola S-record")
                  << tr("RAW binary (little-endian)");
 
-    flash_format->insertItems(0, format_names);
-    eeprom_format->insertItems(0, format_names);
+    flash_format->addItems(format_names);
+    eeprom_format->addItems(format_names);
 }
 
 void QAvr::on_flash_format_currentIndexChanged(int index)
