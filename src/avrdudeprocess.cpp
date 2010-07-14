@@ -35,9 +35,10 @@ AvrdudeProcess::AvrdudeProcess(QObject *parent) :
     _flash_format[FLASH_AUTO] = "a";
     _flash_format[FLASH_INTEL_HEX] = "i";
     _flash_format[FLASH_MOTOROLA] = "s";
-    _flash_format[FLASH_BINARY] = "r";
+    _flash_format[FLASH_RAW] = "r";
 
     _is_fuses_avail = false;
+    _is_locks_avail = false;
 
     connect(this, SIGNAL(finished(int)),
             this, SLOT(processFinished(int)));
@@ -179,21 +180,41 @@ void AvrdudeProcess::processFinished(int exit_code)
         return;
     }
 
-    if (getState() == READ_FUSE_STATE)
+    switch(getState())
     {
-        setState(DECODE_FUSE_STATE);
-        unsigned char ch;
-
-        for (int i = 0; i < _fuses.count(); i++)
+        case READ_FUSE_STATE:
         {
-            QString avrdude_fuse_name = fuseName(_fuses.at(i));
-            QString file_name = _tmp_dir.filePath("." + avrdude_fuse_name);
-            ch = readFromFile(file_name);
-            ch > 0 ? _values[_fuses.at(i)] = ch : _values[_fuses.at(i)] = 0xFF;
+            setState(DECODE_FUSE_STATE);
+            unsigned char ch;
+
+            for (int i = 0; i < _fuses.count(); i++)
+            {
+                QString avrdude_fuse_name = fuseName(_fuses.at(i));
+                QString file_name = _tmp_dir.filePath("." + avrdude_fuse_name);
+                ch = readFromFile(file_name);
+                ch > 0 ? _fuse_values[_fuses.at(i)] = ch : _fuse_values[_fuses.at(i)] = 0xFF;
+            }
+
+            _is_fuses_avail = true;
+            emit fusesAvail(_fuses);
+            break;
         }
 
-        _is_fuses_avail = true;
-        emit fusesAvail(_fuses);
+        case READ_LOCK_STATE:
+        {
+            setState(DECODE_LOCK_STATE);
+            unsigned char ch;
+
+            QString memory = "lock";
+            QString file_name = _tmp_dir.filePath("." + memory);
+            ch = readFromFile(file_name);
+            ch > 0 ? _lock_value = ch : _lock_value = 0xFF;
+
+            _is_locks_avail = true;
+            emit locksAvail();
+            break;
+        }
+
     }
 
     setState(NONE_STATE);
@@ -223,7 +244,7 @@ void AvrdudeProcess::readFuses(QStringList read_fuses)
         }
 
         _fuses = read_fuses;
-        _values.clear();
+        _fuse_values.clear();
         args << "-U" << QString("%1:r:%2:r").arg(avrdude_fuse_name).arg(file_name);
     }
 
@@ -234,7 +255,7 @@ void AvrdudeProcess::readFuses(QStringList read_fuses)
 void AvrdudeProcess::writeFuses(QStringList write_fuses, Fuses fuses)
 {
     QStringList args = formCommonArgsList();
-    _current_state = WRITE_FUSE_STATE;
+    setState(WRITE_FUSE_STATE);
 
     // read fuses args
     for (int i = 0; i < write_fuses.count(); i++)
@@ -256,7 +277,7 @@ bool AvrdudeProcess::isFusesAvail()
 // Return current saved fuse values
 Fuses AvrdudeProcess::getFuses()
 {
-    return _values;
+    return _fuse_values;
 }
 
 // Read fuse from file
@@ -302,6 +323,59 @@ QString AvrdudeProcess::fuseName(QString name)
     return new_name;
 }
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Locks
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void AvrdudeProcess::readLocks()
+{
+    QStringList args = formCommonArgsList();
+    setState(READ_LOCK_STATE);
+    _is_locks_avail = false;
+
+    // read locks args
+    QString memory = "lock";
+    QString file_name = _tmp_dir.filePath("." + memory);
+    QFile   file(file_name);
+
+    if (file.exists())
+    {
+        file.remove();
+    }
+
+    _lock_value = 0xFF;
+    args << "-U" << QString("%1:r:%2:r").arg(memory).arg(file_name);
+
+    start(_command, args);
+}
+
+void AvrdudeProcess::writeLocks(unsigned char lock)
+{
+    QStringList args = formCommonArgsList();
+    setState(WRITE_LOCK_STATE);
+
+    // write lock args
+    QString memory = "lock";
+    args << "-U" << QString("%1:w:0x%2:m").arg(memory).arg(lock, 0, 16);
+
+    start(_command, args);
+}
+
+bool AvrdudeProcess::isLockssAvail()
+{
+    return _is_locks_avail;
+}
+
+unsigned char AvrdudeProcess::getLocks()
+{
+    return _lock_value;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+// Common Flash/EEPROM files
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 // Convert internal flash format to avrdude format
 QString AvrdudeProcess::flashFormat(FlashFormat format)
 {
@@ -312,10 +386,6 @@ QString AvrdudeProcess::flashFormat(FlashFormat format)
 
     return format_str;
 }
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-// Common Flash/EEPROM files
-////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void AvrdudeProcess::uploadCommon(QString memory, QString file, AvrdudeProcess::FlashFormat format)
 {
@@ -422,3 +492,4 @@ void AvrdudeProcess::verifyEEPROM(QString file, AvrdudeProcess::FlashFormat form
     setState(VERIFY_EEPROM_STATE);
     verifyCommon("eeprom", file, format);
 }
+

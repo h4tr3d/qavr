@@ -36,7 +36,7 @@ public:
         FLASH_AUTO,
         FLASH_INTEL_HEX,
         FLASH_MOTOROLA,
-        FLASH_BINARY
+        FLASH_RAW
     };
 
 public:
@@ -67,6 +67,12 @@ public:
     Fuses getFuses();
     void setFuseTrans(QMap<QString, QString> trans);
 
+    // Locks
+    void          readLocks();
+    void          writeLocks(unsigned char lock = 0xFF);
+    bool          isLockssAvail();
+    unsigned char getLocks();
+
     // Flash
     void uploadFlash(QString file, AvrdudeProcess::FlashFormat format = FLASH_AUTO);
     void readFlash(AvrdudeProcess::FlashFormat format = FLASH_INTEL_HEX);
@@ -88,6 +94,11 @@ private:
         WRITE_FUSE_STATE,
         READ_FUSE_STATE,
         DECODE_FUSE_STATE,
+
+        // Lock states
+        WRITE_LOCK_STATE,
+        READ_LOCK_STATE,
+        DECODE_LOCK_STATE,
 
         // Flash states
         UPLOAD_FLASH_STATE,
@@ -133,15 +144,20 @@ private:
 
     // Fuses vars
     QStringList            _fuses;
-    Fuses                  _values;
+    Fuses                  _fuse_values;
     QMap<QString, QString> _fuse_trans;
     bool                   _is_fuses_avail;
 
-    // Flash vars
+    // Locks vars
+    unsigned char          _lock_value;
+    bool                   _is_locks_avail;
+
+    // Flash, EEPROM vars
     QMap<FlashFormat, QString> _flash_format;
 
 signals:
     void fusesAvail(QStringList fuses);
+    void locksAvail();
     void avrdudeFail();
 
 public slots:

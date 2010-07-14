@@ -33,7 +33,7 @@
 #include "bitscellwidget.h"
 #include "version.h"
 
-#undef DATA_PREFIX
+//#undef DATA_PREFIX
 #if !defined(DATA_PREFIX) || defined(WIN32)
 #undef  DATA_PREFIX
 #define DATA_PREFIX "."
@@ -57,6 +57,8 @@ QAvr::QAvr(QWidget *parent) :
             this,             SLOT(readyForReadAvrdude()));
     connect(_avrdude_process, SIGNAL(fusesAvail(QStringList)),
             this,             SLOT(fusesAvail(QStringList)));
+    connect(_avrdude_process, SIGNAL(locksAvail()),
+            this,             SLOT(locksAvail()));
 
     // TODO: load from config? or generate?
     _programmer_types
@@ -135,6 +137,12 @@ QAvr::QAvr(QWidget *parent) :
     fuse_table->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
 
     //
+    // Lock Editor
+    //
+    lock_table->verticalHeader()->setResizeMode(QHeaderView::ResizeToContents);
+    lock_table->horizontalHeader()->setResizeMode(QHeaderView::Stretch);
+
+    //
     // Data and Settings
     //
     _data_dir_sys.setPath(DATA_PREFIX);
@@ -172,15 +180,19 @@ QAvr::QAvr(QWidget *parent) :
     }
 
     //
-    // Load settings
-    //
-    loadSettings();
-
-    //
     // About info
     //
     loadAbout();
 
+    //
+    // Format list
+    //
+    loadFormats();
+
+    //
+    // Load settings
+    //
+    loadSettings();
 }
 
 void QAvr::changeEvent(QEvent *e)
@@ -203,19 +215,19 @@ void QAvr::on_select_hex_file_clicked()
 
     if (!file.isEmpty())
     {
-        hex_file->setText(file);
+        flash_file->setText(file);
     }
 }
 
 void QAvr::on_hex_upload_clicked()
 {
-    if (hex_file->text().isEmpty())
+    if (flash_file->text().isEmpty())
     {
         return;
     }
 
     prepareAvrdudeProcess();
-    _avrdude_process->uploadFlash(hex_file->text());
+    _avrdude_process->uploadFlash(flash_file->text(), _flash_format);
 }
 
 void QAvr::on_load_flash_clicked()
@@ -236,18 +248,18 @@ void QAvr::on_save_flash_clicked()
     }
 
     prepareAvrdudeProcess();
-    _avrdude_process->saveFlash(save_file);
+    _avrdude_process->saveFlash(save_file, _flash_format);
 }
 
 void QAvr::on_verify_flash_clicked()
 {
-    if (hex_file->text().isEmpty())
+    if (flash_file->text().isEmpty())
     {
         return;
     }
 
     prepareAvrdudeProcess();
-    _avrdude_process->verifyFlash(hex_file->text());
+    _avrdude_process->verifyFlash(flash_file->text(), _flash_format);
 }
 
 
@@ -271,7 +283,7 @@ void QAvr::readyForReadAvrdude()
 void QAvr::fusesAvail(QStringList fuses)
 {
     _fuses = _avrdude_process->getFuses();
-    updateGuiFromData();
+    updateGuiFromFuses();
 
     Fuses f = _avrdude_process->getFuses();
     QString str;
@@ -327,10 +339,13 @@ void QAvr::loadSettings()
 
         settings.beginGroup("Programmer");
             mcu->setEditText(settings.value("last_mcu").toString());
-            hex_file->setText(settings.value("flash_file").toString());
+            flash_file->setText(settings.value("flash_file").toString());
+            eeprom_file->setText(settings.value("eeprom_file").toString());
+            flash_format->setCurrentIndex(settings.value("flash_format").toInt());
+            eeprom_format->setCurrentIndex(settings.value("eeprom_format").toInt());
 
             flash_output_splitter->restoreState(settings.value("output_size").toByteArray());
-            // TODO: flash format
+            programmer_tabs->setCurrentIndex(settings.value("programmer_tab").toInt());
         settings.endGroup();
 
         settings.beginGroup("Fuses");
@@ -377,9 +392,14 @@ void QAvr::saveSettings()
     settings.beginGroup("Programmer");
         settings.remove("");
         settings.setValue("last_mcu",    mcu->currentText());
-        settings.setValue("flash_file",  hex_file->text());
+
+        settings.setValue("flash_file",  flash_file->text());
+        settings.setValue("eeprom_file", eeprom_file->text());
+        settings.setValue("flash_format", flash_format->currentIndex());
+        settings.setValue("eeprom_format", eeprom_format->currentIndex());
+
         settings.setValue("output_size", flash_output_splitter->saveState());
-        // TODO: flash format
+        settings.setValue("programmer_tab", programmer_tabs->currentIndex());
     settings.endGroup();
 
     settings.beginGroup("Fuses");
@@ -452,7 +472,7 @@ void QAvr::on_fuse_read_clicked()
 }
 
 
-void QAvr::updateGuiFromData()
+void QAvr::updateGuiFromFuses()
 {
     unsigned char byte = 0;
 
@@ -475,7 +495,7 @@ void QAvr::updateGuiFromData()
     }
 }
 
-void QAvr::updateDataFromGui()
+void QAvr::updateFusesFromGui()
 {
     unsigned char byte = 0;
 
@@ -509,7 +529,7 @@ void QAvr::on_fuse_write_clicked()
 
 void QAvr::fuseBitsToggled(bool /*val*/)
 {
-    updateDataFromGui();
+    updateFusesFromGui();
 }
 
 // Load MCU list
@@ -561,6 +581,9 @@ void QAvr::loadMCU(QDir data_dir)
             }
         }
 
+        unit.lock_names    = mcu_conf.value("lock_names").toStringList();
+        unit.lock_comments = mcu_conf.value("lock_comments").toStringList();
+
         mcu_conf.endGroup();
 
         _mcu_list[unit.name] = unit;
@@ -575,6 +598,7 @@ void QAvr::on_mcu_editTextChanged(QString text)
 void QAvr::on_mcu_currentIndexChanged(QString )
 {
     updateFuseNamesAndComments();
+    updateLockNamesAndComments();
 }
 
 void QAvr::updateFuseNamesAndComments()
@@ -600,7 +624,7 @@ void QAvr::fuseByteEdited(QString text)
         _fuses[fuse] = line_edit->text().toInt(0, 16);
     }
 
-    updateGuiFromData();
+    updateGuiFromFuses();
 }
 
 // resize table for MCUs fuses data
@@ -658,7 +682,7 @@ void QAvr::setFuseBitsToDefault(MCU unit)
         }
     }
 
-    updateDataFromGui();
+    updateFusesFromGui();
 }
 
 // Setting up about display
@@ -727,7 +751,7 @@ void QAvr::on_upload_eeprom_clicked()
     }
 
     prepareAvrdudeProcess();
-    _avrdude_process->uploadEEPROM(eeprom_file->text());
+    _avrdude_process->uploadEEPROM(eeprom_file->text(), _eeprom_format);
 }
 
 void QAvr::on_read_eeprom_clicked()
@@ -749,7 +773,7 @@ void QAvr::on_save_eeprom_clicked()
     }
 
     prepareAvrdudeProcess();
-    _avrdude_process->saveEEPROM(save_file);
+    _avrdude_process->saveEEPROM(save_file, _eeprom_format);
 }
 
 void QAvr::on_verify_eeprom_clicked()
@@ -760,5 +784,188 @@ void QAvr::on_verify_eeprom_clicked()
     }
 
     prepareAvrdudeProcess();
-    _avrdude_process->verifyEEPROM(eeprom_file->text());
+    _avrdude_process->verifyEEPROM(eeprom_file->text(), _eeprom_format);
+}
+
+
+//
+// Lock bits
+//
+void QAvr::on_lock_read_clicked()
+{
+    readLocks();
+}
+
+void QAvr::on_lock_write_clicked()
+{
+    writeLocks();
+}
+
+void QAvr::on_lock_default_clicked()
+{
+    setLockBitsToDefault(_unit);
+}
+
+void QAvr::updateLockTable(MCU unit)
+{
+    int bit;
+    int column = 0;
+
+    //_table->setColumnCount(fuses.count());
+
+    for (int row = 0; row < lock_table->rowCount() - 1; row++)
+    {
+        bit = 7 - row;
+        BitsCellWidget *cell = new BitsCellWidget(0,
+                                                  unit.lock_names.at(bit),
+                                                  unit.lock_comments.at(bit));
+        lock_table->setCellWidget(row, column, cell);
+
+        connect(cell, SIGNAL(valueChanged(bool)),
+                this,       SLOT(lockBitsToggled(bool)));
+    }
+
+    // Set up text widgets
+    QLineEdit *line_edit = new QLineEdit();
+    int line_number = lock_table->rowCount() - 1;
+    lock_table->setCellWidget(line_number, column, line_edit);
+
+    connect(line_edit, SIGNAL(textEdited(QString)),
+            this,      SLOT(lockByteEdited(QString)));
+}
+
+void QAvr::lockBitsToggled(bool val)
+{
+    updateLocksFromGui();
+}
+
+void QAvr::lockByteEdited(QString text)
+{
+    int row    = lock_table->rowCount() - 1;
+    int column = 0;
+
+    QLineEdit *line_edit = static_cast<QLineEdit*>(lock_table->cellWidget(row, column));
+    _lock = line_edit->text().toInt(0, 16);
+
+    updateGuiFromLocks();
+}
+
+void QAvr::updateGuiFromLocks()
+{
+    unsigned char byte   = 0;
+    int           column = 0;
+    int           bit;
+
+    byte = ~_lock;
+
+    for (int row = 0; row < lock_table->rowCount() - 1; row++)
+    {
+        bit = 7 - row;
+        BitsCellWidget *cell = static_cast<BitsCellWidget*>(lock_table->cellWidget(row, column));
+        cell->setChecked(GetBit(byte, bit));
+    }
+
+    QLineEdit *edit = static_cast<QLineEdit*>(
+                        lock_table->cellWidget(lock_table->rowCount() - 1, column));
+    edit->setText(QString("0x%1").arg(_lock, 0, 16));
+}
+
+void QAvr::updateLocksFromGui()
+{
+    unsigned char byte   = 0;
+    int           column = 0;
+
+    int bit;
+
+    byte = 0;
+    for (int row = 0; row < lock_table->rowCount() - 1; row++)
+    {
+        bit = 7 - row;
+        BitsCellWidget *cell = static_cast<BitsCellWidget*>(lock_table->cellWidget(row, column));
+
+        if (cell->isChecked())
+            SetBit(byte, bit);
+    }
+
+    byte = ~byte;
+    _lock = byte;
+
+    QLineEdit *edit = static_cast<QLineEdit*>(lock_table->cellWidget(lock_table->rowCount() - 1, column));
+    edit->setText(QString("0x%1").arg(_lock, 0, 16));
+}
+
+void QAvr::updateLockNamesAndComments()
+{
+    QString mcu_name = mcu->currentText();
+    _unit = _mcu_list[mcu_name];
+    _lock = 0xFF;
+
+    updateLockTable(_unit);
+    setLockBitsToDefault(_unit);
+}
+
+void QAvr::setLockBitsToDefault(MCU unit)
+{
+    int bit;
+    int column = 0;
+    for (int row = 0; row < lock_table->rowCount() - 1; row++)
+    {
+        bit = 7 - row;
+        BitsCellWidget *cell = static_cast<BitsCellWidget*>(lock_table->cellWidget(row, column));
+
+        cell->setChecked(false);
+    }
+
+    updateLocksFromGui();
+}
+
+void QAvr::locksAvail()
+{
+    _lock = _avrdude_process->getLocks();
+    updateGuiFromLocks();
+
+    QString str;
+    str = QString("Lock = 0x%1, ").arg(_lock, 0, 16);
+    std::cout << "Locks avail: " << str.toAscii().data() << std::endl;
+}
+
+void QAvr::readLocks()
+{
+    prepareAvrdudeProcess();
+    _avrdude_process->readLocks();
+}
+
+void QAvr::writeLocks()
+{
+    prepareAvrdudeProcess();
+    _avrdude_process->writeLocks(_lock);
+}
+
+// Set formats
+void QAvr::loadFormats()
+{
+    QStringList format_names;
+    _formats.clear();
+
+    _formats     << AvrdudeProcess::FLASH_AUTO
+                 << AvrdudeProcess::FLASH_INTEL_HEX
+                 << AvrdudeProcess::FLASH_MOTOROLA
+                 << AvrdudeProcess::FLASH_RAW;
+    format_names << tr("Auto")
+                 << tr("Intel Hex")
+                 << tr("Motorola S-record")
+                 << tr("RAW binary (little-endian)");
+
+    flash_format->insertItems(0, format_names);
+    eeprom_format->insertItems(0, format_names);
+}
+
+void QAvr::on_flash_format_currentIndexChanged(int index)
+{
+    _flash_format = _formats.at(index);
+}
+
+void QAvr::on_eeprom_format_currentIndexChanged(int index)
+{
+    _eeprom_format = _formats.at(index);
 }

@@ -45,6 +45,9 @@ typedef struct MCU {
     QMap<QString, QStringList> fuse_names;
     QMap<QString, QStringList> fuse_comments;
     QMap<QString, QStringList> fuse_defaults;
+
+    QStringList                lock_names;
+    QStringList                lock_comments;
 } MCU;
 
 class QAvr : public QWidget, private Ui::QAvr
@@ -63,27 +66,41 @@ private:
     void        saveSettings();
     void        loadMCU(QDir data_dir);
     void        loadAbout();
+    void        loadFormats();
 
     void        readFuses();
     void        writeFuses();
 
+    void        readLocks();
+    void        writeLocks();
+
     void        prepareAvrdudeProcess();
     void        stopAvrdudeProcess();
 
-    void        updateGuiFromData();
-    void        updateDataFromGui();
+    void        updateGuiFromFuses();
+    void        updateFusesFromGui();
+    void        updateGuiFromLocks();
+    void        updateLocksFromGui();
     void        updateFuseNamesAndComments();
+    void        updateLockNamesAndComments();
     void        updateFuseTable(MCU unit);
+    void        updateLockTable(MCU unit);
 
     void        setFuseBitsToDefault(MCU unit);
+    void        setLockBitsToDefault(MCU unit);
 
 private:
     QMap<QString, MCU>     _mcu_list;
     QMap<QString, QString> _fuse_trans;
     QStringList            _programmer_types;
 
+    QList<AvrdudeProcess::FlashFormat> _formats;
+    AvrdudeProcess::FlashFormat        _flash_format;
+    AvrdudeProcess::FlashFormat        _eeprom_format;
+
     AvrdudeProcess     *_avrdude_process;
     Fuses               _fuses;
+    unsigned char       _lock;
     MCU                 _unit;
 
     QString             _xdg_config;
@@ -93,6 +110,11 @@ private:
     QDir                _tmp_dir;
 
 private slots:
+    void on_eeprom_format_currentIndexChanged(int index);
+    void on_flash_format_currentIndexChanged(int index);
+    void on_lock_default_clicked();
+    void on_lock_write_clicked();
+    void on_lock_read_clicked();
     void on_verify_eeprom_clicked();
     void on_save_eeprom_clicked();
     void on_read_eeprom_clicked();
@@ -114,9 +136,13 @@ private slots:
     void avrdudeProcessFinished(int, QProcess::ExitStatus);
     void readyForReadAvrdude();
     void fusesAvail(QStringList fuses);
+    void locksAvail();
 
     void fuseBitsToggled(bool val);
     void fuseByteEdited(QString text);
+
+    void lockBitsToggled(bool val);
+    void lockByteEdited(QString text);
 
 };
 

@@ -32,11 +32,15 @@
 
 typedef struct {
     QString                    name;
+
     QStringList                fuses;
     QMap<QString, int>         fuses_bits_count;
     QMap<QString, QStringList> fuses_names;
     QMap<QString, QStringList> fuses_comments;
     QMap<QString, QStringList> fuses_defaults;
+
+    QStringList                locks_names;
+    QStringList                locks_comments;
 } MCU;
 
 QString name2avrdude(QString name)
@@ -137,6 +141,7 @@ int main(int argc, char *argv[])
         QStringList stack;
         MCU mcu;
         int  current_bit = -1;
+        bool is_xmega = false;
         while (!reader.atEnd())
         {
             reader.readNext();
@@ -147,13 +152,36 @@ int main(int argc, char *argv[])
                 QString stack_str = stack.join("/");
                 QString last = stack.last();
 
-                if (stack_str.contains(QRegExp("/fuse/.*/fuse[0-9]$", Qt::CaseInsensitive)))
+                if (stack_str.contains(QRegExp("avrpart/fuse/.*/fuse[0-9]$", Qt::CaseInsensitive)))
                 {
                     last.remove(0, 4);
                     current_bit = last.toInt();
                     std::cout << "Current bit: " << current_bit << std::endl;
                 }
-                else if (stack_str.contains(QRegExp("/fuse/fuse[0-9]*/text[0-9]$", Qt::CaseInsensitive)))
+                else if (stack_str.contains(QRegExp("avrpart/fuse/fuse[0-9]*/text[0-9]$", Qt::CaseInsensitive)))
+                {
+                    last.remove(0, 4);
+                    current_bit = 8 - last.toInt(); // TODO: value from from MASK
+                    std::cout << "Current bit: " << current_bit << std::endl;
+                }
+                else if (stack_str.contains(QRegExp("avrpart/lockbit$", Qt::CaseInsensitive)))
+                {
+                    // init locks
+                    std::cout << "LockByte begin" << std::endl;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        mcu.locks_names << "NA";
+                        mcu.locks_comments << "";
+                    }
+                }
+                else if (stack_str.contains(QRegExp("/lockbit/lockbit[0-9]*$", Qt::CaseInsensitive)))
+                {
+                    last.remove(0, 7);
+                    current_bit = last.toInt();
+                    std::cout << "Current bit: " << current_bit << std::endl;
+                }
+                else if (stack_str.contains(QRegExp("/lockbit/text[0-9]$", Qt::CaseInsensitive)) &&
+                         is_xmega == true)
                 {
                     last.remove(0, 4);
                     current_bit = 8 - last.toInt(); // TODO: value from from MASK
@@ -165,7 +193,8 @@ int main(int argc, char *argv[])
                 QString stack_str = stack.join("/");
                 stack.removeLast();
                 if (stack_str.contains(QRegExp("/fuse/.*/fuse[0-9]$", Qt::CaseInsensitive)) ||
-                    stack_str.contains(QRegExp("/fuse/fuse[0-9]*/text[0-9]$", Qt::CaseInsensitive)))
+                    stack_str.contains(QRegExp("/fuse/fuse[0-9]*/text[0-9]$", Qt::CaseInsensitive)) ||
+                    stack_str.contains(QRegExp("/lockbit/lockbit[0-9]*$", Qt::CaseInsensitive)))
                 {
                     current_bit = -1;
                 }
@@ -174,10 +203,14 @@ int main(int argc, char *argv[])
             else if (reader.isCharacters() && !reader.isWhitespace())
             {
                 QString stack_str = stack.join("/");
-                //std::cout << stack_str.toAscii().data() << std::endl;
+                std::cout << stack_str.toAscii().data() << std::endl;
                 if (stack_str.contains("/admin/part_name", Qt::CaseInsensitive))
                 {
                     mcu.name = reader.text().toString();
+                    if (mcu.name.contains(QRegExp("^atxmega", Qt::CaseInsensitive)))
+                    {
+                        is_xmega = true;
+                    }
                 }
                 else if (stack_str.contains("/fuse/list", Qt::CaseInsensitive))
                 {
@@ -232,7 +265,6 @@ int main(int argc, char *argv[])
                                           << "[" << current_bit << "].TEXT = "
                                           << mcu.fuses_comments[current_fuse][current_bit].toAscii().data()
                                           << std::endl;
-
                             }
                             else if (stack_str.contains(QRegExp("/fuse[0-9]/default$", Qt::CaseInsensitive)))
                             {
@@ -275,6 +307,44 @@ int main(int argc, char *argv[])
                         }
                     }
                 }
+                else if (stack_str.contains("/lockbit/", Qt::CaseInsensitive))
+                {
+                    if (stack_str.contains(QRegExp("/lockbit[0-9]/name$", Qt::CaseInsensitive)))
+                    {
+                        mcu.locks_names[current_bit] =  reader.text().toString();
+                        std::cout << "LockByte"
+                                  << "[" << current_bit << "].NAME = "
+                                  << mcu.locks_names[current_bit].toAscii().data()
+                                  << std::endl;
+                    }
+                    else if (stack_str.contains(QRegExp("/lockbit[0-9]/text$", Qt::CaseInsensitive)))
+                    {
+                        mcu.locks_comments[current_bit] = reader.text().toString();
+                        std::cout << "LockByte"
+                                  << "[" << current_bit << "].TEXT = "
+                                  << mcu.locks_comments[current_bit].toAscii().data()
+                                  << std::endl;
+                    }
+                    else if (stack_str.contains(QRegExp("/text[0-9]/text$", Qt::CaseInsensitive)) &&
+                             is_xmega == true)
+                    {
+                        // set fuse name and comment
+                        QString text         = reader.text().toString();
+                        QStringList splitted = text.split(" - ");
+                        QString name         = QString("BIT%1").arg(current_bit);
+                        QString comment      = text;
+
+                        if (splitted.count() == 2)
+                        {
+                            name    = splitted.at(1);
+                            comment = splitted.at(0);
+                        }
+
+                        mcu.locks_names[current_bit]    = name;
+                        mcu.locks_comments[current_bit] = comment;
+                    }
+
+                }
             }
 
             if (reader.error())
@@ -315,6 +385,9 @@ int main(int argc, char *argv[])
             mcu_conf.setValue(fuse_text, mcu.fuses_comments[fuse]);
             mcu_conf.setValue(fuse_def,  mcu.fuses_defaults[fuse]);
         }
+
+        mcu_conf.setValue("lock_names",    mcu.locks_names);
+        mcu_conf.setValue("lock_comments", mcu.locks_comments);
 
         mcu_conf.endGroup();
     }
