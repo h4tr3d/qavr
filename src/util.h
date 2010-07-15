@@ -21,6 +21,19 @@
 #ifndef UTIL_H
 #define UTIL_H
 
+#include <list>
+#include <string>
+
+// Detect Qt:
+#if defined(QT_CORE_LIB) || defined(QT_GUI_LIB)
+#define HAVE_QT
+#endif
+
+#ifdef HAVE_QT
+#include <QString>
+#include <QStringList>
+#endif
+
 //
 // Macroses
 //
@@ -43,5 +56,11 @@
 // Declarations
 //
 const char *getUserName();
+std::list<std::string> parseCommandLineArgs(const std::string &program);
+
+// Qt4 based decls
+#ifdef HAVE_QT
+QStringList q_parseCommandLineArgs(const QString &args);
+#endif // HAVE_QT
 
 #endif // UTIL_H

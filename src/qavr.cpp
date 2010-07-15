@@ -452,6 +452,7 @@ void QAvr::prepareAvrdudeProcess()
     _avrdude_process->setProgrammerPort(programmer_port->text());
     _avrdude_process->setProgrammerSpeed(programmer_speed->currentText());
     _avrdude_process->setFuseTrans(_fuse_trans);
+    _avrdude_process->setAdditionalArgs(q_parseCommandLineArgs(avrdude_args->text()));
 
     mcu_name = mcu->currentText();
     if (!_mcu_list[mcu_name].prog_name.isEmpty())

@@ -609,11 +609,7 @@
           </widget>
          </item>
          <item row="5" column="1">
-          <widget class="QLineEdit" name="avrdude_args">
-           <property name="enabled">
-            <bool>false</bool>
-           </property>
-          </widget>
+          <widget class="QLineEdit" name="avrdude_args"/>
          </item>
          <item row="1" column="1">
           <widget class="QLineEdit" name="config_file"/>

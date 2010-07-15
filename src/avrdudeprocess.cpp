@@ -392,7 +392,10 @@ void AvrdudeProcess::uploadCommon(QString memory, QString file, AvrdudeProcess::
     QStringList args = formCommonArgsList();
     QString format_str = flashFormat(format);
 
-    args << "-e" << "-U" <<  memory + ":w:" + file + ":" + format_str;
+    if (memory == "flash")
+        args << "-e";
+
+    args << "-U" <<  memory + ":w:" + file + ":" + format_str;
 
     start(_command, args);
 
