@@ -57,6 +57,11 @@ class QAvr : public QWidget, private Ui::QAvr
 public:
     explicit QAvr(QWidget *parent = 0);
 
+    void     setMcu(const QString &new_mcu);
+    void     setFlash(const QString &file);
+    void     setEEPROM(const QString &file);
+    void     setWorkTab(const QString &tab_name);
+
 protected:
     void        changeEvent(QEvent     *e);
     void        closeEvent(QCloseEvent *e);
@@ -88,6 +93,8 @@ private:
 
     void        setFuseBitsToDefault(MCU unit);
     void        setLockBitsToDefault(MCU unit);
+
+    MCU         getUnitByName(const QString &mcu_name);
 
 private:
     QMap<QString, MCU>     _mcu_list;

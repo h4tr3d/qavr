@@ -33,7 +33,6 @@
 #include "bitscellwidget.h"
 #include "version.h"
 
-//#undef DATA_PREFIX
 #if !defined(DATA_PREFIX) || defined(WIN32)
 #undef  DATA_PREFIX
 #define DATA_PREFIX "."
@@ -262,6 +261,30 @@ void QAvr::on_verify_flash_clicked()
     _avrdude_process->verifyFlash(flash_file->text(), _flash_format);
 }
 
+//
+// Detect current selected unit by internal name and avrdude name
+// TODO: detect by gcc name
+//
+MCU QAvr::getUnitByName(const QString &mcu_name)
+{
+    MCU unit = _mcu_list[mcu_name];
+
+    if (unit.name.isEmpty())
+    {
+        QMap<QString, MCU>::const_iterator it;
+        for (it = _mcu_list.constBegin(); it != _mcu_list.constEnd(); it++)
+        {
+            QString tmp = it.key();
+            if (it.value().prog_name == mcu_name) // Detect by MCU name
+            {
+                unit = it.value();
+                break;
+            }
+        }
+    }
+
+    return unit;
+}
 
 void QAvr::avrdudeProcessFinished(int, QProcess::ExitStatus)
 {
@@ -597,18 +620,16 @@ void QAvr::on_mcu_editTextChanged(QString text)
     on_mcu_currentIndexChanged(text);
 }
 
-void QAvr::on_mcu_currentIndexChanged(QString )
+void QAvr::on_mcu_currentIndexChanged(QString text)
 {
+    _unit = getUnitByName(text);
     updateFuseNamesAndComments();
     updateLockNamesAndComments();
 }
 
 void QAvr::updateFuseNamesAndComments()
 {
-    QString mcu_name = mcu->currentText();
-    _unit = _mcu_list[mcu_name];
     _fuses.clear();
-
     updateFuseTable(_unit);
     setFuseBitsToDefault(_unit);
 }
@@ -727,9 +748,11 @@ void QAvr::closeEvent(QCloseEvent *e)
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // EEPROM work
 //
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void QAvr::on_select_eeprom_clicked()
 {
@@ -790,9 +813,11 @@ void QAvr::on_verify_eeprom_clicked()
 }
 
 
+////////////////////////////////////////////////////////////////////////////////////////////////////
 //
 // Lock bits
 //
+////////////////////////////////////////////////////////////////////////////////////////////////////
 void QAvr::on_lock_read_clicked()
 {
     readLocks();
@@ -903,8 +928,6 @@ void QAvr::updateLocksFromGui()
 
 void QAvr::updateLockNamesAndComments()
 {
-    QString mcu_name = mcu->currentText();
-    _unit = _mcu_list[mcu_name];
     _lock = 0xFF;
 
     updateLockTable(_unit);
@@ -979,4 +1002,66 @@ void QAvr::on_flash_format_currentIndexChanged(int index)
 void QAvr::on_eeprom_format_currentIndexChanged(int index)
 {
     _eeprom_format = _formats.at(index);
+}
+
+//
+// External interface
+//
+
+/**
+ * Set up MCU unit, for work from command line
+ * @param mcu - QAvr or avrdude mcu nonations (ATtiny2313 / t2313)
+ */
+void QAvr::setMcu(const QString &new_mcu)
+{
+    MCU unit = getUnitByName(new_mcu);
+    mcu->setEditText(unit.name);
+}
+
+/**
+ * Set flash file name field to given value
+ * @param file - file name for setting up
+ */
+void QAvr::setFlash(const QString &file)
+{
+    flash_file->setText(file);
+}
+
+/**
+ * Set EEPROM file name field to given value
+ * @param file - file name for setting up
+ */
+void QAvr::setEEPROM(const QString &file)
+{
+    eeprom_file->setText(file);
+}
+
+/**
+ * Set current active tab
+ * @param tab_name - coded tab name:
+ *        flash  - Flash tab
+ *        fuse   - Fuse bits tab
+ *        eeprom - EEPROM tab
+ *        lock   - Lock bits tab
+ *        default or any other text - default (stored) tab is opened
+ */
+void QAvr::setWorkTab(const QString &tab_name)
+{
+    if (tab_name == "flash")
+    {
+        programmer_tabs->setCurrentIndex(0);
+    }
+    else if (tab_name == "fuse")
+    {
+        programmer_tabs->setCurrentIndex(1);
+    }
+    else if (tab_name == "eeprom")
+    {
+        programmer_tabs->setCurrentIndex(2);
+    }
+    else if (tab_name == "lock")
+    {
+        programmer_tabs->setCurrentIndex(4);
+    }
+    // Default or any
 }

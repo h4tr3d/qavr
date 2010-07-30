@@ -23,6 +23,9 @@
 #include <QFileInfo>
 #include <QCoreApplication>
 
+#include <iostream>
+#include <QMessageBox>
+
 #include "avrdudeprocess.h"
 #include "util.h"
 
