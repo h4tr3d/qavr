@@ -300,7 +300,7 @@ void QAvr::readyForReadAvrdude()
         QString data = flash_output->toPlainText();
         data += _avrdude_process->readLine();
         flash_output->setPlainText(data);
-        flash_output->ensureCursorVisible(); // TODO: check
+        flash_output->moveCursor(QTextCursor::End);
     }
 }
 
